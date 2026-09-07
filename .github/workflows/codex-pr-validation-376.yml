@@ -1,0 +1,56 @@
+name: Codex PR validation
+on:
+  push:
+    branches:
+      - codex/verify-pr-376
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        id: node
+        with:
+          node-version: 26.x
+          check-latest: true
+      - uses: ./.github/actions/install-latest-npm
+        with:
+          node: ${{ steps.node.outputs.node-version }}
+      - run: npm i --ignore-scripts --no-audit --no-fund
+      - run: npm run lint --ignore-scripts
+      - run: git remote add upstream https://github.com/npm/make-fetch-happen.git
+      - run: npm run postlint --ignore-scripts
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [22.22.2, 24.15.0, 26.x]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        id: node
+        with:
+          node-version: ${{ matrix.node }}
+          check-latest: ${{ contains(matrix.node, '.x') }}
+      - uses: ./.github/actions/install-latest-npm
+        if: ${{ !startsWith(matrix.node, '22.') }}
+        with:
+          node: ${{ steps.node.outputs.node-version }}
+      - run: npm i --ignore-scripts --no-audit --no-fund
+      - run: npm test --ignore-scripts
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+      - uses: github/codeql-action/analyze@v3
